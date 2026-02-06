@@ -2,44 +2,45 @@
 #![no_std]
 
 use cortex_m_rt::entry;
-use embedded_hal::{digital::OutputPin, delay::DelayNs};
+use rtt_target::{rtt_init_print, rprintln};                                   
+use panic_rtt_target as _;
+
+// use embedded_hal::{ i2c::I2c, digital::OutputPin, delay::DelayNs};
 use microbit::{
     board::Board,
     hal::{
         timer::Timer,
+        twim,
     },
+    pac::twim0::frequency::FREQUENCY_A,
 };
-use rtt_target::{rtt_init_print, rprintln};                                   
-use panic_rtt_target as _;                                                    
 
+use lsm303agr::{AccelMode, AccelOutputDataRate, Lsm303agr};
 
-enum State {
-    LedOn,
-    LedOff,
-}
 #[entry]
 fn init() -> ! {
     rtt_init_print!();
-    let mut board = Board::take().unwrap();
-    let mut timer = Timer::new(board.TIMER0);
+    let board = Board::take().unwrap();
 
-    board.display_pins.col1.set_low().unwrap();
+    let i2c = { twim::Twim::new(board.TWIM0, board.i2c_internal.into(), FREQUENCY_A::K100) };
+    let mut timer0 = Timer::new(board.TIMER0);
 
-    let mut state = State::LedOff;
-
+    // Code from documentation
+    let mut sensor = Lsm303agr::new_with_i2c(i2c);
+    sensor.init().unwrap();
+    sensor
+        .set_accel_mode_and_odr(
+            &mut timer0,
+            AccelMode::LowPower,
+            AccelOutputDataRate::Hz50,
+        )
+        .unwrap();
     loop {
-        state = match state {
-            State::LedOff => {
-                board.display_pins.row1.set_high().unwrap();
-                rprintln!("high");
-                State::LedOn
-            }
-            State::LedOn => {
-                board.display_pins.row1.set_low().unwrap();
-                rprintln!("low");
-                State::LedOff
-            }
-        };
-        timer.delay_ms(1000);
+        if sensor.accel_status().unwrap().xyz_new_data() {
+            let (x, y, z) = sensor.acceleration().unwrap().xyz_mg();
+
+            // RTT instead of normal print
+            rprintln!("Acceleration: x {} y {} z {}", x, y, z);
+        }
     }
 }
