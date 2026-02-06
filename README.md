@@ -3,6 +3,10 @@ Rust implementation of a bubble level for the Microbit V2
 
 It uses the 5x5 LED array, A button, B button, timer, and accellerometer
 
+### Author
+
+Kaleb Striplin
+
 ### Run
 
 Plug in your MicroBit v2
